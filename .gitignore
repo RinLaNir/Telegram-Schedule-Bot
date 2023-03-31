@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Hidden files
+config.py
+populate_db.py
+view_db.py
+compmath_bot.db
