@@ -22,7 +22,7 @@ class AuthState(StatesGroup):
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=TOKEN)#, proxy=PROXY_URL)
+bot = Bot(token=TOKEN, proxy=PROXY_URL)
 
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
