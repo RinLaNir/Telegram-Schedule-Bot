@@ -2,25 +2,25 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, UniqueConst
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
-Base = declarative_base()
+SheduleBase = declarative_base()
 
-class Subject(Base):
+class Subject(SheduleBase):
     __tablename__ = 'subjects'
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False, unique=True)
 
-class Teacher(Base):
+class Teacher(SheduleBase):
     __tablename__ = 'teachers'
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False, unique=True)
     contacts = Column(String)
 
-class LessonType(Base):
+class LessonType(SheduleBase):
     __tablename__ = 'lesson_types'
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False, unique=True)
 
-class Schedule(Base):
+class Schedule(SheduleBase):
     __tablename__ = 'schedules'
     id = Column(Integer, primary_key=True)
     day_of_week = Column(Integer, nullable=False)
@@ -37,7 +37,7 @@ class Schedule(Base):
     
     __table_args__ = (UniqueConstraint('day_of_week', 'time', 'week_type', name='uq_schedule_day_time_week_type'), )
 
-class AuthorizedUser(Base):
+class AuthorizedUser(SheduleBase):
     __tablename__ = 'authorized_user'
 
     id = Column(Integer, primary_key=True)

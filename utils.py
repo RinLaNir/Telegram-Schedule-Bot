@@ -1,6 +1,6 @@
 import datetime
 from xml.etree import ElementTree
-from models import Teacher, Schedule, Subject, LessonType, AuthorizedUser
+from schedule_models import Teacher, Schedule, Subject, LessonType, AuthorizedUser
 from typing import List
 from config import WEEK_START, SECRET_CODE
 import re
@@ -12,7 +12,7 @@ def get_week_number(date: datetime.date):
     return week_number
 
 
-authorized_users = set()
+
 WEEK_START_NUMBER = get_week_number(WEEK_START)
 
 
@@ -102,7 +102,6 @@ def authorize_user(user: AuthorizedUser, secret_code, session):
         user.is_authorized = 1
         user.attempts = 0
         session.commit()
-        authorized_users.add(user.id)
         return True
     elif user.is_authorized == 0:
         user.attempts += 1

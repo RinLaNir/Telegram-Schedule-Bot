@@ -7,8 +7,9 @@ from aiogram.dispatcher.filters import Text
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.types import ParseMode, ContentType
 from aiogram.utils import executor
-from init_db import SessionLocal
-from models import Teacher, Schedule, Subject, LessonType, AuthorizedUser
+from init_schedule_db import SheduleSessionLocal
+from init_user_db import UserSessionLocal
+from schedule_models import Teacher, Schedule, Subject, LessonType, AuthorizedUser
 from config import TOKEN, WEEK_START, SECRET_CODE, ADMINS, PROXY_URL
 import re
 from functools import wraps
@@ -21,11 +22,13 @@ class AuthState(StatesGroup):
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=TOKEN, proxy=PROXY_URL)
+bot = Bot(token=TOKEN)#, proxy=PROXY_URL)
 
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
+
+authorized_users = set()
 
 
 def check_authorization(func):
@@ -44,7 +47,7 @@ async def cmd_reset_attempts(message: types.Message):
         return
 
     user_id = int(message.get_args())
-    with SessionLocal() as session:
+    with UserSessionLocal() as session:
         authorized_user = session.query(AuthorizedUser).filter_by(user_id=user_id).first()
         if authorized_user:
             authorized_user.attempts = 0
@@ -59,23 +62,24 @@ async def cmd_auth(message: types.Message):
     if message.from_user.id in authorized_users:
         await message.reply("Ви вже авторизовані.")
         return
-    await message.reply("Будь ласка, введіть секретний код.")
+    await message.reply("Будь ласка, введіть секретний код використовуючи команду /auth.")
     await AuthState.waiting_for_code.set()
 
 
 @dp.message_handler(lambda message: message.text, state=AuthState.waiting_for_code)
 async def process_secret_code(message: types.Message, state: FSMContext):
     secret_code = message.text.strip()
-    session = SessionLocal()
+    session = UserSessionLocal()
     user = get_or_create_user(message.from_user.id, session)
 
     if not can_authorize(user):
         await message.reply("Ви вже використали максимальну кількість спроб авторизації. Будь ласка, зверніться до адміністратора.")
-        state.finish()
+        await state.finish()
         return
 
     if authorize_user(user, secret_code, session):
         await message.reply("Вітаю! Авторизація пройшла успішно.\nСписок доступних команд: /help")
+        authorized_users.add(user.user_id)
         await state.finish()
     else:
         await message.reply("Неправильний код. Будь ласка, спробуйте ще раз.")
@@ -103,7 +107,7 @@ async def cmd_help(message: types.Message):
 @dp.message_handler(commands=["teachers"])
 @check_authorization
 async def cmd_teachers(message: types.Message):
-    session = SessionLocal()
+    session = SheduleSessionLocal()
 
     teachers = session.query(Teacher).all()
     response = "<b>Контакти викладачів:</b>\n\n"
@@ -141,7 +145,7 @@ async def cmd_week_type(message: types.Message):
 @dp.message_handler(commands=["schedule"])
 @check_authorization
 async def cmd_schedule(message: types.Message):
-    session = SessionLocal()
+    session = SheduleSessionLocal()
 
     week_type = get_week_type(datetime.date.today())
     schedule = session.query(Schedule).join(Subject).join(LessonType).join(Teacher, isouter=True).order_by(Schedule.day_of_week, Schedule.time).all()
@@ -153,7 +157,7 @@ async def cmd_schedule(message: types.Message):
 
 
 async def handle_schedule_by_day(message: types.Message, days_offset: int):
-    session = SessionLocal()
+    session = SheduleSessionLocal()
     target_day = datetime.date.today() + datetime.timedelta(days=days_offset)
     week_type = get_week_type(target_day)
     day_of_week = target_day.weekday() + 1
@@ -186,7 +190,7 @@ async def cmd_tomorrow(message: types.Message):
 
 
 if __name__ == "__main__":
-    with SessionLocal() as session:
+    with UserSessionLocal() as session:
         authorized_users = load_authorized_users(session)
     
     executor.start_polling(dp, skip_updates=True)
