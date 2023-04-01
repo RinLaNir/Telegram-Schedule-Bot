@@ -19,7 +19,7 @@ WEEK_START_NUMBER = get_week_number(WEEK_START)
 def get_week_type(date: datetime.date):
     global WEEK_START_NUMBER
     week_number = get_week_number(date)
-    week_type = 1 if (week_number - WEEK_START_NUMBER) % 2 else 2
+    week_type = 2 if (week_number - WEEK_START_NUMBER) % 2 else 1
     return week_type
 
 
