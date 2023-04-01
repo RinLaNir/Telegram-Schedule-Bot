@@ -22,7 +22,7 @@ class AuthState(StatesGroup):
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=TOKEN, proxy=PROXY_URL)
+bot = Bot(token=TOKEN)#, proxy=PROXY_URL)
 
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
@@ -137,7 +137,7 @@ async def cmd_teachers(message: types.Message):
 async def cmd_week_type(message: types.Message):
     week_type = get_week_type(datetime.date.today())
     response = "Зараз "
-    response += f"парний" if week_type == 1 else f"непарний"
+    response += f"парний" if week_type == 2 else f"непарний"
     response += " тиждень"
     await message.reply(response, parse_mode=ParseMode.HTML)
 
@@ -147,10 +147,9 @@ async def cmd_week_type(message: types.Message):
 async def cmd_schedule(message: types.Message):
     session = SheduleSessionLocal()
 
-    week_type = get_week_type(datetime.date.today())
     schedule = session.query(Schedule).join(Subject).join(LessonType).join(Teacher, isouter=True).order_by(Schedule.day_of_week, Schedule.time).all()
 
-    response = format_schedule(schedule, week_type)
+    response = format_schedule(schedule)
     session.close()
 
     await message.reply(response, parse_mode=ParseMode.HTML, disable_web_page_preview=True)

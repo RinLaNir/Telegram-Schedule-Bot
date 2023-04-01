@@ -40,13 +40,16 @@ def parse_teacher_contacts(contacts_str: str):
     return phone, email, telegram, viber
 
 
-def format_schedule_for_day(schedule: List[Schedule]) -> str:
+def format_schedule_for_day(schedule: List[Schedule], extended: bool = False) -> str:
     schedule_str = ""
 
     if schedule:
         for lesson in schedule:
             clock_emoji = "🕒"
-            schedule_str += f"{clock_emoji} <b>{lesson.time}</b> | <b>{lesson.subject.name}</b> ({lesson.lesson_type.name})"
+            schedule_str += f"{clock_emoji} <b>{lesson.time}</b>" 
+            if extended and lesson.week_type != 0: 
+                schedule_str += f" <b>({'непарна' if lesson.week_type == 1 else 'парна'})</b>"
+            schedule_str += f" | <b>{lesson.subject.name}</b> ({lesson.lesson_type.name})"
             if lesson.teacher:
                 schedule_str += f", {lesson.teacher.name}"
             
@@ -60,16 +63,16 @@ def format_schedule_for_day(schedule: List[Schedule]) -> str:
     return schedule_str
 
 
-def format_schedule(schedule: List[Schedule], week_type: int) -> str:
+def format_schedule(schedule: List[Schedule]) -> str:
     weekdays = ["Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота"]
     schedule_str = ""
 
     for day, weekday in enumerate(weekdays, start=1):
-        lessons_for_day = [lesson for lesson in schedule if lesson.day_of_week == day and (lesson.week_type == week_type or lesson.week_type == 0)]
+        lessons_for_day = [lesson for lesson in schedule if lesson.day_of_week == day]
 
         if lessons_for_day: 
             schedule_str += f"<b>{weekday}</b>:\n"
-        schedule_str += format_schedule_for_day(lessons_for_day)
+        schedule_str += format_schedule_for_day(lessons_for_day, extended=True)
         schedule_str += "\n"
 
     return schedule_str
