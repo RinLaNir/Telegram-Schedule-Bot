@@ -4,6 +4,7 @@ from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.types import ParseMode, ContentType
 from aiogram.utils import executor
 from init_db import SessionLocal
@@ -21,7 +22,9 @@ class AuthState(StatesGroup):
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=TOKEN, proxy=PROXY_URL)
-dp = Dispatcher(bot)
+
+storage = MemoryStorage()
+dp = Dispatcher(bot, storage=storage)
 dp.middleware.setup(LoggingMiddleware())
 
 
@@ -68,6 +71,7 @@ async def process_secret_code(message: types.Message, state: FSMContext):
 
     if not can_authorize(user):
         await message.reply("Ви вже використали максимальну кількість спроб авторизації. Будь ласка, зверніться до адміністратора.")
+        state.finish()
         return
 
     if authorize_user(user, secret_code, session):
