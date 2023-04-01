@@ -35,7 +35,7 @@ def check_authorization(func):
     @wraps(func)
     async def wrapper(message: types.Message, *args, **kwargs):
         if message.from_user.id not in authorized_users:
-            await message.reply("Необхідно ввести секретний код для доступу до команд.")
+            await message.reply("Необхідно ввести секретний код для доступу до команд. Використайте команду /auth")
             return
         return await func(message, *args, **kwargs)
     return wrapper
@@ -62,7 +62,7 @@ async def cmd_auth(message: types.Message):
     if message.from_user.id in authorized_users:
         await message.reply("Ви вже авторизовані.")
         return
-    await message.reply("Будь ласка, введіть секретний код використовуючи команду /auth.")
+    await message.reply("Будь ласка, введіть секретний код.")
     await AuthState.waiting_for_code.set()
 
 
