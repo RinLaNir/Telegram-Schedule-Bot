@@ -3,6 +3,7 @@ from xml.etree import ElementTree
 from models import Teacher, Schedule, Subject, LessonType, AuthorizedUser
 from typing import List
 from config import WEEK_START, SECRET_CODE
+import re
 
 def get_week_number(date: datetime.date):
     week_number = date.isocalendar()[1]
