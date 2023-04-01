@@ -79,10 +79,7 @@ async def process_secret_code(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands=["start"])
 async def cmd_start(message: types.Message):
-    await message.reply('''Ласкаво просимо! Будь ласка, авторизуйтеся, введіть команду /auth, після якої слідує ваш секретний код.
-
-Приклад: /auth 12345
-Список доступних команд: /help
+    await message.reply('''Ласкаво просимо! Будь ласка, авторизуйтеся через команду /auth, після якої послідує ваш секретний код.
 ''')
 
 

@@ -93,7 +93,7 @@ def get_or_create_user(user_id, session):
 
 def can_authorize(user: AuthorizedUser):
     assert user.is_authorized == 0
-    return user.attempts < 3
+    return user.attempts < 5
 
 
 def authorize_user(user: AuthorizedUser, secret_code, session):
