@@ -1,108 +1,29 @@
 import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
-from aiogram.types import ParseMode
+from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Text
+from aiogram.types import ParseMode, ContentType
 from aiogram.utils import executor
 from init_db import SessionLocal
-from xml.etree import ElementTree
 from models import Teacher, Schedule, Subject, LessonType, AuthorizedUser
-from config import TOKEN, WEEK_START, SECRET_CODE, ADMINS
-import datetime
-from typing import List
+from config import TOKEN, WEEK_START, SECRET_CODE, ADMINS, PROXY_URL
 import re
 from functools import wraps
+from utils import *
+
+
+class AuthState(StatesGroup):
+    waiting_for_code = State()
+
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=TOKEN)
+bot = Bot(token=TOKEN, proxy=PROXY_URL)
 dp = Dispatcher(bot)
 dp.middleware.setup(LoggingMiddleware())
 
-authorized_users = set()
-
-def get_week_number(date: datetime.date):
-    week_number = date.isocalendar()[1]
-    if date.month == 1 and week_number > 50:
-        week_number = 0
-    return week_number
-
-WEEK_START_NUMBER = get_week_number(WEEK_START)
-
-def parse_teacher_contacts(contacts_str: str):
-    if not contacts_str or not contacts_str.strip():
-        return None, None, None, None
-
-    try:
-        contacts_xml = ElementTree.fromstring(contacts_str)
-    except ElementTree.ParseError:
-        return None, None, None, None
-
-    phone = contacts_xml.findtext("phone", default=None)
-    email = ', '.join([e.text for e in contacts_xml.findall("email") if e.text]) or None
-    telegram = contacts_xml.findtext("telegram", default=None)
-    viber = contacts_xml.findtext("viber", default=None)
-
-    return phone, email, telegram, viber
-
-def get_week_type(date: datetime.date):
-    week_number = get_week_number(date)
-    week_type = 1 if (week_number - WEEK_START_NUMBER) % 2 else 2
-    return week_type
-
-def format_schedule_for_day(schedule: List[Schedule]) -> str:
-    schedule_str = ""
-
-    if schedule:
-        for lesson in schedule:
-            clock_emoji = "🕒"
-            schedule_str += f"{clock_emoji} <b>{lesson.time}</b> | <b>{lesson.subject.name}</b> ({lesson.lesson_type.name})"
-            if lesson.teacher:
-                schedule_str += f", {lesson.teacher.name}"
-            
-            if lesson.location:
-                if re.match(r"^https?://", lesson.location):
-                    schedule_str += f', <a href="{lesson.location}">Онлайн</a>'
-                else:
-                    schedule_str += f", ауд. {lesson.location}"
-            schedule_str += "\n"
-    
-    return schedule_str
-
-def format_schedule(schedule: List[Schedule], week_type: int) -> str:
-    weekdays = ["Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота"]
-    schedule_str = ""
-
-    for day, weekday in enumerate(weekdays, start=1):
-        lessons_for_day = [lesson for lesson in schedule if lesson.day_of_week == day and (lesson.week_type == week_type or lesson.week_type == 0)]
-
-        if lessons_for_day: 
-            schedule_str += f"<b>{weekday}</b>:\n"
-        schedule_str += format_schedule_for_day(lessons_for_day)
-        schedule_str += "\n"
-
-    return schedule_str
-
-def load_authorized_users(session):
-    authorized_users = session.query(AuthorizedUser).filter(AuthorizedUser.is_authorized == 1).all()
-    return {user.user_id for user in authorized_users}
-
-def authorize_user(user_id, secret_code, session):
-    user = session.query(AuthorizedUser).filter_by(user_id=user_id).first()
-
-    if user is None:
-        user = AuthorizedUser(user_id=user_id, is_authorized=0, attempts=0)
-        session.add(user)
-
-    if secret_code == SECRET_CODE:
-        user.is_authorized = 1
-        user.attempts = 0
-        session.commit()
-        authorized_users.add(user_id)
-        return True
-    elif user.is_authorized == 0:
-        user.attempts += 1
-        session.commit()
-        return False
 
 def check_authorization(func):
     @wraps(func)
@@ -112,6 +33,7 @@ def check_authorization(func):
             return
         return await func(message, *args, **kwargs)
     return wrapper
+
 
 @dp.message_handler(commands=["reset_attempts"])
 async def cmd_reset_attempts(message: types.Message):
@@ -128,20 +50,32 @@ async def cmd_reset_attempts(message: types.Message):
         else:
             await message.reply(f"Пользователь с ID {user_id} не найден в базе данных.")
 
+
 @dp.message_handler(commands=["auth"])
 async def cmd_auth(message: types.Message):
-    secret_code = message.text.split(' ')[1] if len(message.text.split(' ')) > 1 else ''
-    session = SessionLocal()
-    user_id = message.from_user.id
+    if message.from_user.id in authorized_users:
+        await message.reply("Ви вже авторизовані.")
+        return
+    await message.reply("Будь ласка, введіть секретний код.")
+    await AuthState.waiting_for_code.set()
 
-    if not secret_code:
-        await message.reply("Будь ласка, введіть секретний код після команди.")
+
+@dp.message_handler(lambda message: message.text, state=AuthState.waiting_for_code)
+async def process_secret_code(message: types.Message, state: FSMContext):
+    secret_code = message.text.strip()
+    session = SessionLocal()
+    user = get_or_create_user(message.from_user.id, session)
+
+    if not can_authorize(user):
+        await message.reply("Ви вже використали максимальну кількість спроб авторизації. Будь ласка, зверніться до адміністратора.")
         return
 
-    if authorize_user(user_id, secret_code, session):
+    if authorize_user(user, secret_code, session):
         await message.reply("Вітаю! Авторизація пройшла успішно.\nСписок доступних команд: /help")
+        await state.finish()
     else:
         await message.reply("Неправильний код. Будь ласка, спробуйте ще раз.")
+
 
 @dp.message_handler(commands=["start"])
 async def cmd_start(message: types.Message):
@@ -150,6 +84,7 @@ async def cmd_start(message: types.Message):
 Приклад: /auth 12345
 Список доступних команд: /help
 ''')
+
 
 @dp.message_handler(commands=["help"])
 @check_authorization
@@ -163,6 +98,7 @@ async def cmd_help(message: types.Message):
 /week_type - Повертає, який тиждень зараз - парний чи непарний
 ''')
     
+
 @dp.message_handler(commands=["teachers"])
 @check_authorization
 async def cmd_teachers(message: types.Message):
@@ -190,6 +126,7 @@ async def cmd_teachers(message: types.Message):
 
     await message.reply(response, parse_mode=ParseMode.HTML)
 
+
 @dp.message_handler(commands=["week_type"])
 @check_authorization
 async def cmd_week_type(message: types.Message):
@@ -198,6 +135,7 @@ async def cmd_week_type(message: types.Message):
     response += f"парний" if week_type == 1 else f"непарний"
     response += " тиждень"
     await message.reply(response, parse_mode=ParseMode.HTML)
+
 
 @dp.message_handler(commands=["schedule"])
 @check_authorization
@@ -211,6 +149,7 @@ async def cmd_schedule(message: types.Message):
     session.close()
 
     await message.reply(response, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
 
 async def handle_schedule_by_day(message: types.Message, days_offset: int):
     session = SessionLocal()
@@ -232,16 +171,17 @@ async def handle_schedule_by_day(message: types.Message, days_offset: int):
     session.close()
     await message.reply(message_string, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
+
 @dp.message_handler(commands=["today"])
 @check_authorization
 async def cmd_today(message: types.Message):
     await handle_schedule_by_day(message, days_offset=0)
 
+
 @dp.message_handler(commands=["tomorrow"])
 @check_authorization
 async def cmd_tomorrow(message: types.Message):
     await handle_schedule_by_day(message, days_offset=1)
-
 
 
 if __name__ == "__main__":
